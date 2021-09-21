@@ -1,97 +1,132 @@
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.util.Iterator;
+import java.io.FileReader;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.StringTokenizer;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.filecache.DistributedCache;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.MultipleInputs;
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 import org.apache.log4j.BasicConfigurator;
 
 public class Query4 {
-    public static class CustMapper extends
-            Mapper<LongWritable, Text, Text, Text> {
-        //1,Dmauen Btcevjnlvhctq,24,Female,2,7628.92
+    public class MapClass extends Mapper{
 
-        public void map(LongWritable key, Text value, Context context)
-                throws IOException, InterruptedException {
-            String line = value.toString();
-            String[] personInfo = line.split(",");
-            context.write(new Text(personInfo[0]),new Text("C," + personInfo[1]));
-        }
-    }
-    public static class TransMapper extends
-            Mapper<LongWritable, Text, Text, Text> {
-        //1,42181,748.14,5,Z5XzG`0NLrNE*VM8mWTqzI]}yT\^r$c[c~5[iWOS sX?
+        private final IntWritable one = new IntWritable(1);
+        private Text word = new Text();
+        private Set stopWords = new HashSet();
 
-        public void map(LongWritable key, Text value, Context context)
-                throws IOException, InterruptedException {
-            String line = value.toString();
-            String[] transInfo = line.split(",");
-            context.write(new Text(transInfo[1]),new Text("T," + transInfo[2]));
-        }
-    }
-    public static class MyCombiner extends
-            Reducer<Text, Text, Text, Text> {
-        public void reduce(Text key, Iterable<Text> values,
-                           Context context) throws IOException, InterruptedException {
-            String name = "";
-            double total = 0.0;
-            int cnt = 0;
-            for (Text t : values)
-            {
-                String[] val = t.toString().split(",");
-                if (val[0].equals("T"))
-                {
-                    cnt++;
-                    total += Double.parseDouble(val[1]);
+        @Override
+        protected void setup(Context context) throws IOException, InterruptedException {
+            try{
+                Path[] stopWordsFiles = DistributedCache.getLocalCacheFiles(context.getConfiguration());
+                if(stopWordsFiles != null && stopWordsFiles.length > 0) {
+                    for(Path stopWordFile : stopWordsFiles) {
+                        readFile(stopWordFile);
+                    }
                 }
-                else if (val[0].equals("C"))
-                {
-                    name = val[1];
+            } catch(IOException ex) {
+                System.err.println("Exception in mapper setup: " + ex.getMessage());
+            }
+        }
+
+        /**
+         * map function of Mapper parent class takes a line of text at a time
+         * splits to tokens and passes to the context as word along with value as one
+         */
+        public void map(LongWritable key, Text value,
+                           Context context)
+                throws IOException, InterruptedException {
+
+            String line = value.toString();
+            StringTokenizer st = new StringTokenizer(line," ");
+
+            while(st.hasMoreTokens()){
+                String wordText = st.nextToken();
+
+                if(!stopWords.contains(wordText.toLowerCase())) {
+                    word.set(wordText);
+                    context.write(word,one);
                 }
             }
-            String str = String.format("%s,%d,%.2f", name, cnt, total);
-            context.write(key, new Text(str));
+
+        }
+
+        private void readFile(Path filePath) {
+            try{
+                BufferedReader bufferedReader = new BufferedReader(new FileReader(filePath.toString()));
+                String stopWord = null;
+                while((stopWord = bufferedReader.readLine()) != null) {
+                    stopWords.add(stopWord.toLowerCase());
+                }
+            } catch(IOException ex) {
+                System.err.println("Exception while reading stop words file: " + ex.getMessage());
+            }
         }
     }
 
-    public static class MyReducer extends
-            Reducer<Text, Text, Text, Text> {
-        public void reduce(Text key, Iterable<Text> values,
-                           Context context) throws IOException, InterruptedException {
-            String name = "";
-            double total = 0.0;
-            int cnt = 0;
-            for (Text t : values)
-            {
-                String[] val = t.toString().split(",");
-                if(name == "") name = val[0];
-                cnt += Integer.parseInt(val[1]);
-                total += Double.parseDouble(val[2]);
+    public class ReduceClass extends Reducer{
+
+        /**
+         * Method which performs the reduce operation and sums
+         * all the occurrences of the word before passing it to be stored in output
+         */
+        public void reduce(Text key, Iterable values,
+                              Context context)
+                throws IOException, InterruptedException {
+
+            int sum = 0;
+            Iterator valuesIt = values.iterator();
+
+            while(valuesIt.hasNext()){
+                sum = sum + valuesIt.next().get();
             }
-            String str = String.format("%d   %.2f", cnt, total);
-            context.write(new Text(name), new Text(str));
+
+            context.write(key, new IntWritable(sum));
         }
     }
+
     public static void main(String[] args) throws Exception {
+
+//        job.setJobName("Word Counter With Stop Words Removal");
+
+        //Add input and output file paths to job based on the arguments passed
+//        FileOutputFormat.setOutputPath(job, new Path(args[1]));
+
+
+
+        //Set the MapClass and ReduceClass in the job
+
+
+
         BasicConfigurator.configure();
         Configuration conf = new Configuration();
         Job job = Job.getInstance(conf);
-        job.setJarByClass(Query2.class);
-        job.setCombinerClass(MyCombiner.class);
-        job.setReducerClass(MyReducer.class);
+        job.setJarByClass(Query4.class);
+        job.setMapperClass(MapClass.class);
+        job.setReducerClass(ReduceClass.class);
         job.setOutputKeyClass(Text.class);
-        job.setOutputValueClass(Text.class);
+        job.setOutputValueClass(IntWritable.class);
+        job.setOutputFormatClass(TextOutputFormat.class);
 
-        //Multiple input
-        MultipleInputs.addInputPath(job, new Path(args[0]),TextInputFormat.class, CustMapper.class);
-        MultipleInputs.addInputPath(job, new Path(args[1]),TextInputFormat.class, TransMapper.class);
+        FileInputFormat.addInputPath(job, new Path(args[0]));
+
+        // load small table
+        DistributedCache.addCacheFile(new Path(args[1]).toUri(), job.getConfiguration());
 
         //Output setup
         FileSystem fs = FileSystem.getLocal(conf);

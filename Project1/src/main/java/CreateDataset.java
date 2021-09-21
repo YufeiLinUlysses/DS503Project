@@ -62,7 +62,7 @@ public class CreateDataset {
         }
     }
     public static void main(String[] args){
-        saveToFile("Customer.txt", 50000);
-        saveToFile("Transaction.txt", 5000000);
+        saveToFile("file:///C:/Users/huawe/Desktop/DS503Project/Project1/data/Customer.txt", 50000);
+        saveToFile("file:///C:/Users/huawe/Desktop/DS503Project/Project1/data/Transaction.txt", 5000000);
     }
 }

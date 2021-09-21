@@ -1,0 +1,1 @@
+putty.exe -ssh ds503@localhost 14226 -pw ds503
