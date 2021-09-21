@@ -13,7 +13,7 @@ import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.log4j.BasicConfigurator;
 
-public class Query2 {
+public class Query3 {
     public static class CustMapper extends
             Mapper<LongWritable, Text, Text, Text> {
         //1,Dmauen Btcevjnlvhctq,24,Female,2,7628.92
@@ -22,7 +22,7 @@ public class Query2 {
                 throws IOException, InterruptedException {
             String line = value.toString();
             String[] personInfo = line.split(",");
-            context.write(new Text(personInfo[0]),new Text("C," + personInfo[1]));
+            context.write(new Text(personInfo[0]),new Text("C," + personInfo[1] +","+ personInfo[5]));
         }
     }
     public static class TransMapper extends
@@ -33,16 +33,17 @@ public class Query2 {
                 throws IOException, InterruptedException {
             String line = value.toString();
             String[] transInfo = line.split(",");
-            context.write(new Text(transInfo[1]),new Text("T," + transInfo[2]));
+            context.write(new Text(transInfo[1]),new Text("T," + transInfo[2]+ "," + transInfo[3]));
         }
     }
     public static class MyCombiner extends
             Reducer<Text, Text, Text, Text> {
         public void reduce(Text key, Iterable<Text> values,
                            Context context) throws IOException, InterruptedException {
-            String name = "";
+            String pInfo = "";
             double total = 0.0;
             int cnt = 0;
+            int minNumber = 11;
             for (Text t : values)
             {
                 String[] val = t.toString().split(",");
@@ -50,13 +51,15 @@ public class Query2 {
                 {
                     cnt++;
                     total += Double.parseDouble(val[1]);
+                    minNumber = Math.min(minNumber, Integer.parseInt(val[2]));
+
                 }
                 else if (val[0].equals("C"))
                 {
-                    name = val[1];
+                    pInfo = val[1] + "-" + val[2];
                 }
             }
-            String str = String.format("%s,%d,%.2f", name, cnt, total);
+            String str = String.format("%s,%d,%.2f,%d", pInfo, cnt, total,minNumber);
             context.write(key, new Text(str));
         }
     }
@@ -65,18 +68,21 @@ public class Query2 {
             Reducer<Text, Text, Text, Text> {
         public void reduce(Text key, Iterable<Text> values,
                            Context context) throws IOException, InterruptedException {
-            String name = "";
+            String pInfo = "";
             double total = 0.0;
             int cnt = 0;
+            int minNumber = 11;
             for (Text t : values)
             {
                 String[] val = t.toString().split(",");
-                if(name == "") name = val[0];
+                if(pInfo == "") pInfo = val[0];
                 cnt += Integer.parseInt(val[1]);
                 total += Double.parseDouble(val[2]);
+                minNumber = Math.min(minNumber, Integer.parseInt(val[3]));
             }
-            String str = String.format("%s   %d   %.2f", name, cnt, total);
-            context.write(new Text(key), new Text(str));
+            String[] needs = pInfo.split("-");
+            String str = String.format("%s   %s   %d   %.2f   %d", needs[0],needs[1], cnt, total, minNumber);
+            context.write(key, new Text(str));
         }
     }
     public static void main(String[] args) throws Exception {

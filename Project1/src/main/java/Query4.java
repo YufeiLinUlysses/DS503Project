@@ -13,7 +13,7 @@ import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.log4j.BasicConfigurator;
 
-public class Query2 {
+public class Query4 {
     public static class CustMapper extends
             Mapper<LongWritable, Text, Text, Text> {
         //1,Dmauen Btcevjnlvhctq,24,Female,2,7628.92
@@ -75,8 +75,8 @@ public class Query2 {
                 cnt += Integer.parseInt(val[1]);
                 total += Double.parseDouble(val[2]);
             }
-            String str = String.format("%s   %d   %.2f", name, cnt, total);
-            context.write(new Text(key), new Text(str));
+            String str = String.format("%d   %.2f", cnt, total);
+            context.write(new Text(name), new Text(str));
         }
     }
     public static void main(String[] args) throws Exception {
