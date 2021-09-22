@@ -34,7 +34,7 @@ public class CreateDataset {
         String alphabet = "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ @!_`~$%^&*#-+=[]{}\\|?.;";
         Random rand = new Random();
         int CustID = rand.nextInt(49999)+1, TransNumItems = rand.nextInt(10)+1, strlen = rand.nextInt(30) + 20;
-        double TransTotal = Math.random()*(1000-9)+10;
+        double TransTotal = Math.random()*(1000-10)+10;
 
         String tmp = Integer.toString(i) + "," + Integer.toString(CustID) + "," + String.format("%.2f",TransTotal) + ","  + Integer.toString(TransNumItems) + ",";
         for(int j = 0; j<strlen;j++){
@@ -62,7 +62,7 @@ public class CreateDataset {
         }
     }
     public static void main(String[] args){
-        saveToFile("file:///C:/Users/huawe/Desktop/DS503Project/Project1/data/Customer.txt", 50000);
-        saveToFile("file:///C:/Users/huawe/Desktop/DS503Project/Project1/data/Transaction.txt", 5000000);
+        saveToFile("C:/Users/huawe/Desktop/DS503Project/Project1/data/Customer.txt", 50000);
+        saveToFile("C:/Users/huawe/Desktop/DS503Project/Project1/data/Transaction.txt", 5000000);
     }
 }

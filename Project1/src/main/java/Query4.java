@@ -1,133 +1,113 @@
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.util.Iterator;
-import java.io.FileReader;
+import java.net.URI;
+import java.util.HashMap;
+import java.io.BufferedReader;
+
+import java.io.InputStreamReader;
 import java.util.HashSet;
-import java.util.Set;
-import java.util.StringTokenizer;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.filecache.DistributedCache;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
-import org.apache.hadoop.mapreduce.lib.input.MultipleInputs;
-import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
-import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 import org.apache.log4j.BasicConfigurator;
 
 public class Query4 {
-    public class MapClass extends Mapper{
-
-        private final IntWritable one = new IntWritable(1);
-        private Text word = new Text();
-        private Set stopWords = new HashSet();
-
-        @Override
-        protected void setup(Context context) throws IOException, InterruptedException {
-            try{
-                Path[] stopWordsFiles = DistributedCache.getLocalCacheFiles(context.getConfiguration());
-                if(stopWordsFiles != null && stopWordsFiles.length > 0) {
-                    for(Path stopWordFile : stopWordsFiles) {
-                        readFile(stopWordFile);
+    public static class TransMapper extends
+            Mapper<LongWritable, Text, Text, Text> {
+        private HashMap<String, String> customer = new HashMap<>();
+        // Read in Customer dataset and store into a hashmap
+        public void setup(Context context) throws IOException, InterruptedException{
+            URI[] cacheFiles = context.getCacheFiles();
+            if (cacheFiles != null && cacheFiles.length > 0)
+            {
+                try{
+                    FileSystem fs = FileSystem.get(context.getConfiguration());
+                    Path path = new Path(cacheFiles[0].toString());
+                    BufferedReader reader = new BufferedReader(new InputStreamReader(fs.open(path)));
+                    String line = null;
+                    while((line = reader.readLine()) != null) {
+                        String[] splitted = line.split(",");
+                        String cid = splitted[0];
+                        String cc = splitted[4];
+                        customer.put(cid,cc);
                     }
+                } catch(IOException ex) {
+                    System.err.println("Exception in mapper setup: " + ex.getMessage());
                 }
-            } catch(IOException ex) {
-                System.err.println("Exception in mapper setup: " + ex.getMessage());
             }
         }
 
-        /**
-         * map function of Mapper parent class takes a line of text at a time
-         * splits to tokens and passes to the context as word along with value as one
-         */
-        public void map(LongWritable key, Text value,
-                           Context context)
+        public void map(LongWritable key, Text value, Context context)
                 throws IOException, InterruptedException {
-
             String line = value.toString();
-            StringTokenizer st = new StringTokenizer(line," ");
-
-            while(st.hasMoreTokens()){
-                String wordText = st.nextToken();
-
-                if(!stopWords.contains(wordText.toLowerCase())) {
-                    word.set(wordText);
-                    context.write(word,one);
-                }
-            }
-
+            String[] transInfo = line.split(",");
+            String cid = transInfo[1];
+            String countryCode = customer.get(cid);
+            String str = String.format("%s",transInfo[2]);
+            context.write(new Text(countryCode + "," + cid),new Text(str));
         }
-
-        private void readFile(Path filePath) {
-            try{
-                BufferedReader bufferedReader = new BufferedReader(new FileReader(filePath.toString()));
-                String stopWord = null;
-                while((stopWord = bufferedReader.readLine()) != null) {
-                    stopWords.add(stopWord.toLowerCase());
-                }
-            } catch(IOException ex) {
-                System.err.println("Exception while reading stop words file: " + ex.getMessage());
+    }
+    public static class MyCombiner extends
+            Reducer<Text, Text, Text, Text> {
+        public void reduce(Text key, Iterable<Text> values,
+                           Context context) throws IOException, InterruptedException {
+            double min = 1001;
+            double max = 0;
+            for (Text t : values)
+            {
+                Double transTotal = Double.parseDouble(t.toString());
+                if (min > transTotal) min = transTotal;
+                if (max < transTotal) max = transTotal;
             }
+            String[] keys = key.toString().split(",");
+            String str = String.format("%s,%.2f,%.2f", keys[1], min, max);
+            context.write(new Text(keys[0]), new Text(str));
         }
     }
 
-    public class ReduceClass extends Reducer{
-
-        /**
-         * Method which performs the reduce operation and sums
-         * all the occurrences of the word before passing it to be stored in output
-         */
-        public void reduce(Text key, Iterable values,
-                              Context context)
-                throws IOException, InterruptedException {
-
-            int sum = 0;
-            Iterator valuesIt = values.iterator();
-
-            while(valuesIt.hasNext()){
-                sum = sum + valuesIt.next().get();
+    public static class MyReducer extends
+            Reducer<Text, Text, Text, Text> {
+        public void reduce(Text key, Iterable<Text> values,
+                           Context context) throws IOException, InterruptedException {
+            HashSet<String> customer = new HashSet<>();
+            double min = 1001;
+            double max = 0.0;
+            for (Text t : values)
+            {
+                String[] val = t.toString().split(",");
+                double val1 = Double.parseDouble(val[1]);
+                if(min > val1) min = val1;
+                double val2 = Double.parseDouble(val[2]);
+                if(max < val2) max = val2;
+                customer.add(val[0]);
             }
-
-            context.write(key, new IntWritable(sum));
+            String str = String.format("%d   %.2f   %.2f", customer.size(), min, max);
+            context.write(key, new Text(str));
         }
     }
-
     public static void main(String[] args) throws Exception {
-
-//        job.setJobName("Word Counter With Stop Words Removal");
-
-        //Add input and output file paths to job based on the arguments passed
-//        FileOutputFormat.setOutputPath(job, new Path(args[1]));
-
-
-
-        //Set the MapClass and ReduceClass in the job
-
-
-
         BasicConfigurator.configure();
         Configuration conf = new Configuration();
         Job job = Job.getInstance(conf);
+
+        // add small table to cache
+        job.addCacheFile(new URI(args[0]));
+
         job.setJarByClass(Query4.class);
-        job.setMapperClass(MapClass.class);
-        job.setReducerClass(ReduceClass.class);
+        job.setMapperClass(TransMapper.class);
+        job.setCombinerClass(MyCombiner.class);
+        job.setReducerClass(MyReducer.class);
         job.setOutputKeyClass(Text.class);
-        job.setOutputValueClass(IntWritable.class);
-        job.setOutputFormatClass(TextOutputFormat.class);
+        job.setOutputValueClass(Text.class);
 
-        FileInputFormat.addInputPath(job, new Path(args[0]));
-
-        // load small table
-        DistributedCache.addCacheFile(new Path(args[1]).toUri(), job.getConfiguration());
-
+        FileInputFormat.setInputPaths(job, new Path(args[1]));
         //Output setup
         FileSystem fs = FileSystem.getLocal(conf);
         Path p = new Path(args[2]);
