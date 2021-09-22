@@ -18,7 +18,7 @@ import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.log4j.BasicConfigurator;
 
-public class Query4 {
+public class Query5 {
     public static class TransMapper extends
             Mapper<LongWritable, Text, Text, Text> {
         private HashMap<String, String> customer = new HashMap<>();
@@ -34,9 +34,24 @@ public class Query4 {
                     String line = null;
                     while((line = reader.readLine()) != null) {
                         String[] splitted = line.split(",");
+                        int age = Integer.parseInt(splitted[2]);
+                        String tag = "";
+                        if(age < 20){
+                            tag = "[10,20)";
+                        } else if(age >=20 && age <30){
+                            tag = "[20,30)";
+                        } else if(age >=30 && age <40){
+                            tag = "[30,40)";
+                        } else if(age >=40 && age <50){
+                            tag = "[40,50)";
+                        } else if(age >=50 && age <60){
+                            tag = "[50,60)";
+                        } else{
+                            tag = "[60,70]";
+                        }
                         String cid = splitted[0];
-                        String cc = splitted[4];
-                        customer.put(cid,cc);
+                        String gender = splitted[3];
+                        customer.put(cid,tag + "    " +gender);
                     }
                 } catch(IOException ex) {
                     System.err.println("Exception in mapper setup: " + ex.getMessage());
@@ -49,9 +64,9 @@ public class Query4 {
             String line = value.toString();
             String[] transInfo = line.split(",");
             String cid = transInfo[1];
-            String countryCode = customer.get(cid);
+            String groupInfo = customer.get(cid);
             String str = String.format("%s",transInfo[2]);
-            context.write(new Text(countryCode + "," + cid),new Text(str));
+            context.write(new Text(groupInfo),new Text(str));
         }
     }
     public static class MyCombiner extends
@@ -60,15 +75,18 @@ public class Query4 {
                            Context context) throws IOException, InterruptedException {
             double min = 1001;
             double max = 0;
+            double total = 0;
+            int cnt = 0;
             for (Text t : values)
             {
                 Double transTotal = Double.parseDouble(t.toString());
                 if (min > transTotal) min = transTotal;
                 if (max < transTotal) max = transTotal;
+                cnt += 1;
+                total += transTotal;
             }
-            String[] keys = key.toString().split(",");
-            String str = String.format("%s,%.2f,%.2f", keys[1], min, max);
-            context.write(new Text(keys[0]), new Text(str));
+            String str = String.format("%.2f,%.2f,%.2f,%d", min, max, total, cnt);
+            context.write(new Text(key), new Text(str));
         }
     }
 
@@ -76,19 +94,21 @@ public class Query4 {
             Reducer<Text, Text, Text, Text> {
         public void reduce(Text key, Iterable<Text> values,
                            Context context) throws IOException, InterruptedException {
-            HashSet<String> customer = new HashSet<>();
+            int cnt = 0;
             double min = 1001;
             double max = 0.0;
+            double total = 0;
             for (Text t : values)
             {
                 String[] val = t.toString().split(",");
-                double val1 = Double.parseDouble(val[1]);
+                double val1 = Double.parseDouble(val[0]);
                 if(min > val1) min = val1;
-                double val2 = Double.parseDouble(val[2]);
+                double val2 = Double.parseDouble(val[1]);
                 if(max < val2) max = val2;
-                customer.add(val[0]);
+                cnt += Integer.parseInt(val[3]);
+                total += Double.parseDouble(val[2]);
             }
-            String str = String.format("%d   %.2f   %.2f", customer.size(), min, max);
+            String str = String.format("%.2f   %.2f   %.2f", total/cnt, min, max);
             context.write(key, new Text(str));
         }
     }
@@ -103,7 +123,7 @@ public class Query4 {
         // add small table to cache
         job.addCacheFile(new URI(args[0]));
 
-        job.setJarByClass(Query4.class);
+        job.setJarByClass(Query5.class);
         job.setMapperClass(TransMapper.class);
         job.setCombinerClass(MyCombiner.class);
         job.setReducerClass(MyReducer.class);

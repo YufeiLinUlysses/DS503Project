@@ -86,6 +86,9 @@ public class Query3 {
         }
     }
     public static void main(String[] args) throws Exception {
+        // args[0] is customer file path
+        // args[1] is transaction file path
+        // args[2] is output path
         BasicConfigurator.configure();
         Configuration conf = new Configuration();
         Job job = Job.getInstance(conf);

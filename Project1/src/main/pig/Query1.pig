@@ -1,7 +1,8 @@
-customer = LOAD 'file:///home/ds503/shared_folder/Project1/data/Customer.txt' USING PigStorage(',') 
+-- file:///home/ds503/shared_folder/Project1/data/Customer.txt
+customer = LOAD '$customer' USING PigStorage(',') 
    as (cid:int,name:chararray,age:int,gender:chararray,country_code:int,salary:float);
-
-transaction = LOAD 'file:///home/ds503/shared_folder/Project1/data/Transaction.txt' USING PigStorage(',') 
+-- file:///home/ds503/shared_folder/Project1/data/Transaction.txt
+transaction = LOAD '$transaction' USING PigStorage(',') 
    as (tid:int,cid:int,trans_total:float,trans_num_items:int,transdesc:chararray);
 
 groupedTrans = GROUP transaction BY cid;
@@ -11,4 +12,4 @@ tmp = FOREACH combined GENERATE name,cnt;
 ordered = ORDER tmp BY cnt ASC;
 min = LIMIT ordered 1;
 
-DUMP min;
+STORE min INTO '$out' USING PigStorage(',');
